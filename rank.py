@@ -258,6 +258,19 @@ PRODUCTION_SIGNALS = [
     "retrieval system", "search system", "ranking system", "recommendation",
 ]
 
+CAVEAT_PATTERNS = [
+    r"experimented with chatgpt",
+    r"self-directed ml projects",
+    r"transitioning toward more ai",
+    r"learning modern ml practice",
+    r"technical depth in ai is limited",
+    r"lighter on technical depth",
+    r"adjacent ml exposure",
+    r"limited backend exposure",
+    r"haven't done much application development"
+]
+
+
 # Keywords in career descriptions proving ML/AI depth (subset of JD core)
 CAREER_ML_KEYWORDS = [
     "embedding", "embeddings", "vector", "retrieval", "faiss", "pinecone",
