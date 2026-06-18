@@ -273,19 +273,25 @@ def get_title_tier(title: str) -> int:
 # ============================================================
 
 def is_honeypot(candidate: dict) -> bool:
-    """Return True if candidate should be completely excluded."""
+    """
+    Return True if candidate exhibits data fabrication signals.
+    Checks 11 distinct patterns of impossible or implausible data.
+    """
     career_history = candidate.get("career_history", [])
     skills = candidate.get("skills", [])
     profile = candidate.get("profile", {})
+    education = candidate.get("education", [])
+    signals = candidate.get("redrob_signals", {})
+    yoe = profile.get("years_of_experience", 0)
 
-    # 1. Timeline reversal (career dates)
+    # 1. Career timeline reversal (end_date < start_date is physically impossible)
     for job in career_history:
         start = job.get("start_date")
         end = job.get("end_date")
         if start and end and end < start:
             return True
 
-    # 2. Expert skills with zero experience duration
+    # 2. Fake expertise: "expert" proficiency with 0 months usage
     expert_zero = sum(
         1 for sk in skills
         if sk.get("proficiency") == "expert" and sk.get("duration_months", 1) == 0
@@ -294,9 +300,61 @@ def is_honeypot(candidate: dict) -> bool:
         return True
 
     # 3. Physically impossible YoE
-    yoe = profile.get("years_of_experience", 0)
     if yoe > 50:
         return True
+
+    # 4. Education date reversal (graduating before enrolling)
+    for edu in education:
+        if edu.get("end_year", 9999) < edu.get("start_year", 0):
+            return True
+
+    # 5. Salary range inverted (min > max)
+    salary = signals.get("expected_salary_range_inr_lpa", {})
+    s_min = salary.get("min", 0)
+    s_max = salary.get("max", 0)
+    if s_min > 0 and s_max > 0 and s_min > s_max:
+        return True
+
+    # 6. Triple-perfect behavioral signals (statistically near-impossible)
+    rr = signals.get("recruiter_response_rate", 0)
+    ir = signals.get("interview_completion_rate", 0)
+    oa = signals.get("offer_acceptance_rate", -1)
+    if rr == 1.0 and ir == 1.0 and oa == 1.0:
+        return True
+
+    # 7. YoE vs sum of career durations mismatch > 10 years
+    if career_history and yoe > 0:
+        total_months = sum(j.get("duration_months", 0) for j in career_history)
+        if abs(yoe - total_months / 12.0) > 10:
+            return True
+
+    # 8. Four or more Redrob assessment scores at exactly 100
+    assessment_scores = signals.get("skill_assessment_scores", {})
+    if sum(1 for v in assessment_scores.values() if v >= 100.0) >= 4:
+        return True
+
+    # 9. Skill duration exceeds plausible career length
+    max_plausible = (yoe + 2) * 12
+    if max_plausible > 0:
+        for sk in skills:
+            if sk.get("duration_months", 0) > max_plausible:
+                return True
+
+    # 10. Duplicate career entries (same company + same start_date = copy-paste)
+    seen_jobs: set = set()
+    for job in career_history:
+        key = (job.get("company", "").lower().strip(), job.get("start_date", ""))
+        if key != ("", "") and key in seen_jobs:
+            return True
+        seen_jobs.add(key)
+
+    # 11. is_current=True job with a past end_date (logical contradiction)
+    today_str = str(TODAY)
+    for job in career_history:
+        if job.get("is_current", False):
+            end = job.get("end_date")
+            if end and end < today_str:
+                return True
 
     return False
 
