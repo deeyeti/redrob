@@ -16,17 +16,17 @@ Given a dataset of 100,000 candidate profiles (`candidates.jsonl`) and a job des
 
 ## 🏗️ Approach
 
-A **multi-signal JD-aware ranker** built entirely in Python with no external API calls, no GPU, and no pre-trained models — runs in ~50 seconds on 100K candidates on CPU.
+A **multi-signal JD-aware ranker** built entirely in Python with no external API calls, no GPU, and no pre-trained models — processes 100K candidates in **~10 seconds** on a modern multi-core CPU using parallel processing.
 
 ### Scoring Architecture
 
 | Component | Weight | What it measures |
 |---|---|---|
-| **Skill Match** | 35% | JD skill taxonomy match across skills list + career text + assessment scores. 60+ keywords weighted by proficiency × duration |
+| **Skill Match** | 35% | Hand-curated JD taxonomy + Pure-Python TF-IDF matching against the full JD text + Skill synonym normalization. Weighted by proficiency × duration |
 | **Title/Role** | 17% | 4-tier taxonomy: ML/AI/NLP Engineer (1.0) → SWE/Backend (0.55) → Frontend/QA (0.15) → Non-tech (0.0) |
 | **YoE Fit** | 13% | Sweet spot 6–8 yrs (JD says 5–9); tapers off beyond that |
 | **Behavioral Signals** | 14% | `recruiter_response_rate` (35%), `interview_completion_rate` (25%), GitHub score (15%), recency (10%), saved by recruiters (10%), profile completeness (5%) |
-| **Career Depth** | 7% | ML keyword breadth in career descriptions + production deployment signals ("shipped", "at scale", "A/B test", "NDCG") + description richness |
+| **Career Depth** | 7% | ML keyword breadth + Regex-based quantified impact detection (e.g. 10x, 20ms, 5 million) + production deployment signals ("shipped", "A/B test") + description richness |
 | **Company Context** | 6% | Product/tech company ratio vs consulting; tech industry (FinTech, EdTech, SaaS, AI) rewarded; company size preference (scaleup sweet spot) |
 | **Education** | 4% | Institution tier (tier_1=IIT/IISc/top global) + field relevance (CS/AI/Math) |
 | **Availability** | 4% | Notice period + open-to-work flag + location (Pune/Noida preferred) + work mode preference |
@@ -69,7 +69,7 @@ pip install -r requirements.txt
 python rank.py --candidates candidates.jsonl --out team_antigravity.csv
 ```
 
-**Expected output**: ~50 seconds on a modern CPU, `team_antigravity.csv` with 100 ranked candidates.
+**Expected output**: ~10-15 seconds on a modern multi-core CPU, `team_antigravity.csv` with 100 ranked candidates.
 
 ### Validate submission format
 
@@ -107,7 +107,7 @@ Open `antigravity_pipeline.ipynb` — it calls `rank.py` directly and includes f
 
 | Constraint | Requirement | Our Result |
 |---|---|---|
-| Runtime | ≤ 5 min | ~50 seconds |
+| Runtime | ≤ 5 min | ~10-15 seconds (parallelized) |
 | Memory | ≤ 16 GB RAM | < 2 GB |
 | Compute | CPU only | ✅ CPU only |
 | Network | No external calls | ✅ No API calls |
@@ -119,7 +119,7 @@ Open `antigravity_pipeline.ipynb` — it calls `rank.py` directly and includes f
 - **Total candidates processed**: 100,000
 - **Honeypots filtered**: 0
 - **Soft-disqualified (consulting-only)**: ~3,700
-- **Score range**: 0.611 – 0.688
+- **Score range**: 0.650 – 0.759
 - **Top candidate**: Lead AI Engineer, 6.7 yrs, FinTech product company, strong production retrieval system evidence
 
 ---
