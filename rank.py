@@ -1071,19 +1071,19 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
     honeypot_count = 0
     disqualified_count = 0
 
-    candidates_list = list(load_candidates(candidates_path))
-    total = len(candidates_list)
-    print(f"Loaded {total:,} candidates. Scoring in parallel...")
+    print(f"Loading candidates from: {candidates_path}")
+    for candidate in load_candidates(candidates_path):
+        total += 1
+        result = score_candidate(candidate)
+        if result is None:
+            honeypot_count += 1
+            continue
+        if result["_disqualifier"] < 0.5:
+            disqualified_count += 1
+        results.append(result)
 
-    # Parallel processing
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        for result in executor.map(score_candidate, candidates_list, chunksize=2000):
-            if result is None:
-                honeypot_count += 1
-                continue
-            if result["_disqualifier"] < 0.5:
-                disqualified_count += 1
-            results.append(result)
+        if total % 10000 == 0:
+            print(f"  Processed {total:,} candidates... ({len(results):,} scored)")
 
     print(f"\nProcessing complete:")
     print(f"  Total candidates: {total:,}")
