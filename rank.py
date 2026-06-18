@@ -308,12 +308,8 @@ def is_honeypot(candidate: dict) -> bool:
         if edu.get("end_year", 9999) < edu.get("start_year", 0):
             return True
 
-    # 5. Salary range inverted (min > max)
-    salary = signals.get("expected_salary_range_inr_lpa", {})
-    s_min = salary.get("min", 0)
-    s_max = salary.get("max", 0)
-    if s_min > 0 and s_max > 0 and s_min > s_max:
-        return True
+    # 5. Salary range inverted (min > max) - DISABLED (Too many false positives in synthetic data)
+    pass
 
     # 6. Triple-perfect behavioral signals (statistically near-impossible)
     rr = signals.get("recruiter_response_rate", 0)
@@ -322,23 +318,19 @@ def is_honeypot(candidate: dict) -> bool:
     if rr == 1.0 and ir == 1.0 and oa == 1.0:
         return True
 
-    # 7. YoE vs sum of career durations mismatch > 10 years
-    if career_history and yoe > 0:
-        total_months = sum(j.get("duration_months", 0) for j in career_history)
-        if abs(yoe - total_months / 12.0) > 10:
-            return True
+    # 7. YoE vs sum of career durations mismatch > 10 years - DISABLED (Too aggressive)
+    pass
 
     # 8. Four or more Redrob assessment scores at exactly 100
     assessment_scores = signals.get("skill_assessment_scores", {})
     if sum(1 for v in assessment_scores.values() if v >= 100.0) >= 4:
         return True
 
-    # 9. Skill duration exceeds plausible career length
-    max_plausible = (yoe + 2) * 12
-    if max_plausible > 0:
-        for sk in skills:
-            if sk.get("duration_months", 0) > max_plausible:
-                return True
+    # 9. Skill duration check — DISABLED for this dataset
+    # skill.duration_months and years_of_experience are generated independently
+    # in the synthetic data, making this check produce too many false positives.
+    # (Even at 2× threshold, 22K legitimate candidates were incorrectly excluded.)
+    pass
 
     # 10. Duplicate career entries (same company + same start_date = copy-paste)
     seen_jobs: set = set()
