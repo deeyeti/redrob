@@ -1,0 +1,80 @@
+# Redrob Hackathon — Submission Metadata
+# Team Antigravity
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "team_antigravity"
+
+primary_contact:
+  name: "Team Antigravity"
+  email: ""        # fill before portal submission
+  phone: ""        # fill before portal submission
+
+team_members:
+  - name: "Team Antigravity"
+    email: ""
+    role: "ML Engineer / Team Lead"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/team-antigravity/redrob-ranker"
+
+sandbox_link: ""   # fill before portal submission (HuggingFace Spaces / Streamlit)
+
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./team_antigravity.csv"
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "Windows 11 / Local machine"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.13"
+  os: "Windows 11"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+ai_tools_used:
+  - "Claude (Antigravity IDE) — architecture discussion, code review, debugging"
+
+ai_usage_summary: |
+  Used Claude via the Antigravity IDE for architecture discussion, code review,
+  and debugging. All ranking logic, skill taxonomy, signal weights, and design
+  decisions were made by the team. No candidate data was fed to any LLM during
+  the ranking process — the ranker is fully deterministic and CPU-only.
+
+# ============================================================================
+# Approach summary
+# ============================================================================
+methodology_summary: |
+  Rule-based multi-signal ranker with 8 scoring components and explicit
+  reasoning capture. Core signals: (1) JD skill taxonomy match across the
+  skills list, career descriptions, and Redrob assessment scores — 60+
+  keywords weighted by proficiency × duration; (2) title/role tier
+  (ML/AI/NLP Engineer > SWE > non-tech); (3) YoE fit vs 5-9yr JD band;
+  (4) behavioral signal composite (recruiter response rate, interview
+  completion, GitHub activity, recency, saved-by-recruiters); (5) career
+  depth — ML keyword breadth and production deployment signals in career
+  descriptions; (6) company context — product/tech company ratio vs
+  consulting, tech industry bonus, company size preference; (7) education
+  tier; (8) availability (notice period, open-to-work, location).
+  Honeypot detection filters reversed career dates and impossible skill
+  claims. Runtime is ~50 seconds for 100K candidates on CPU with 16GB RAM.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

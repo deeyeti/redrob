@@ -1,0 +1,39 @@
+# Large data files (too big for GitHub)
+candidates.jsonl
+candidates.jsonl.gz
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Debug / test outputs
+team_antigravity_test.csv
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Problem statement docs (large binary files, not needed for code review)
+README.docx
+job_description.docx
+redrob_signals_doc.docx
+submission_spec.docx
