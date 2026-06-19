@@ -1,29 +1,29 @@
 # Redrob Hackathon — Submission Metadata
-# Team Antigravity
+# Team Eclectic
 
 # ============================================================================
 # Team identity
 # ============================================================================
-team_name: "team_antigravity"
+team_name: "team_eclectic"
 
 primary_contact:
-  name: "Team Antigravity"
+  name: "Team Eclectic"
   email: "omarunthombre@gmail.com"        # fill before portal submission
   phone: "+971 50 906 4610/ +91 85917 30489"        # fill before portal submission
 
 team_members:
-  - name: "Team Antigravity"
+  - name: "Team Eclectic"
     email: "omarunthombre@gmail.com"
     role: "ML Engineer / Team Lead"
 
 # ============================================================================
 # Code and reproducibility
 # ============================================================================
-github_repo: "https://github.com/team-antigravity/redrob-ranker"
+github_repo: "https://github.com/team-eclectic/redrob-ranker"
 
 sandbox_link: ""   # fill before portal submission (HuggingFace Spaces / Streamlit)
 
-reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./team_antigravity.csv"
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./team_eclectic.csv"
 
 # ============================================================================
 # Compute environment
@@ -43,10 +43,10 @@ compute:
 # AI tools declaration
 # ============================================================================
 ai_tools_used:
-  - "Claude (Antigravity IDE) — architecture discussion, code review, debugging"
+  - "Claude (Eclectic IDE) — architecture discussion, code review, debugging"
 
 ai_usage_summary: |
-  Used Claude via the Antigravity IDE for architecture discussion, code review,
+  Used Claude via the Eclectic IDE for architecture discussion, code review,
   and debugging. All ranking logic, skill taxonomy, signal weights, and design
   decisions were made by the team. No candidate data was fed to any LLM during
   the ranking process — the ranker is fully deterministic and CPU-only.

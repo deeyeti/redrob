@@ -1,8 +1,8 @@
-# Team Antigravity — Redrob Hackathon Submission
+# Team Eclectic — Redrob Hackathon Submission
 
 > **Challenge**: Redrob India Runs Data & AI Challenge  
 > **Task**: Intelligent Candidate Discovery & Ranking — Senior AI Engineer role  
-> **Team**: Antigravity
+> **Team**: Eclectic
 
 ---
 
@@ -66,21 +66,21 @@ pip install -r requirements.txt
 ### Generate submission
 
 ```bash
-python rank.py --candidates candidates.jsonl --out team_antigravity.csv
+python rank.py --candidates candidates.jsonl --out team_eclectic.csv
 ```
 
-**Expected output**: ~10-15 seconds on a modern multi-core CPU, `team_antigravity.csv` with 100 ranked candidates.
+**Expected output**: ~10-15 seconds on a modern multi-core CPU, `team_eclectic.csv` with 100 ranked candidates.
 
 ### Validate submission format
 
 ```bash
-python validate_submission.py team_antigravity.csv
+python validate_submission.py team_eclectic.csv
 # → Submission is valid.
 ```
 
 ### Run in notebook
 
-Open `antigravity_pipeline.ipynb` — it calls `rank.py` directly and includes format validation and an inspection cell.
+Open `eclectic_pipeline.ipynb` — it calls `rank.py` directly and includes format validation and an inspection cell.
 
 ---
 
@@ -89,14 +89,14 @@ Open `antigravity_pipeline.ipynb` — it calls `rank.py` directly and includes f
 ```
 .
 ├── rank.py                          # Main ranking pipeline (standalone)
-├── antigravity_pipeline.ipynb       # Jupyter notebook wrapper
+├── eclectic_pipeline.ipynb       # Jupyter notebook wrapper
 ├── validate_submission.py           # Official format checker (provided by Redrob)
 ├── candidate_schema.json            # Official candidate schema (provided by Redrob)
 ├── sample_candidates.json           # 50-candidate sample for testing
 ├── sample_submission.csv            # Example submission format
 ├── submission_metadata.yaml         # Team metadata for portal submission
 ├── requirements.txt                 # Python dependencies
-└── team_antigravity.csv             # Our final submission
+└── team_eclectic.csv             # Our final submission
 ```
 
 > `candidates.jsonl` (487 MB) is excluded from the repo via `.gitignore`. Place it in the root before running.

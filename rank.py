@@ -1,10 +1,10 @@
 """
-Team Antigravity — Intelligent Candidate Ranker (v3)
+Team Eclectic — Intelligent Candidate Ranker (v3)
 Redrob Hackathon: Senior AI Engineer Role
 
 Usage:
-    python rank.py --candidates candidates.jsonl --out team_antigravity.csv
-    python rank.py --candidates sample_candidates.json --out team_antigravity.csv
+    python rank.py --candidates candidates.jsonl --out team_eclectic.csv
+    python rank.py --candidates sample_candidates.json --out team_eclectic.csv
 
 Constraints: CPU-only, no network, ≤5 min, ≤16 GB RAM
 """
@@ -1136,9 +1136,9 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
 # ============================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Team Antigravity — Candidate Ranker")
+    parser = argparse.ArgumentParser(description="Team Eclectic — Candidate Ranker")
     parser.add_argument("--candidates", required=True, help="Path to candidates.jsonl or sample_candidates.json")
-    parser.add_argument("--out", default="team_antigravity.csv", help="Output CSV path")
+    parser.add_argument("--out", default="team_eclectic.csv", help="Output CSV path")
     parser.add_argument("--debug", action="store_true", help="Include debug score breakdown columns")
     args = parser.parse_args()
 

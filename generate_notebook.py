@@ -1,5 +1,5 @@
 """
-Generates antigravity_pipeline.ipynb — a fully self-contained notebook
+Generates eclectic_pipeline.ipynb — a fully self-contained notebook
 that embeds all the ranking code directly (no imports from rank.py).
 """
 import json
@@ -111,7 +111,7 @@ elif os.path.exists("sample_candidates.json"):
 else:
     raise FileNotFoundError("❌ No candidates file found — place candidates.jsonl here")
 
-OUTPUT_PATH = "team_antigravity.csv"
+OUTPUT_PATH = "team_eclectic.csv"
 
 print(f"📂 Input  : {DATA_PATH}")
 print(f"📝 Output : {OUTPUT_PATH}")
@@ -126,7 +126,7 @@ print(f"\\n⏱️  Total wall-clock time: {elapsed:.1f}s ({elapsed/60:.2f} min)"
 validate_block = """\
 # Run official format validator
 import subprocess, sys
-result = subprocess.run([sys.executable, "validate_submission.py", "team_antigravity.csv"],
+result = subprocess.run([sys.executable, "validate_submission.py", "team_eclectic.csv"],
                        capture_output=True, text=True)
 print(result.stdout or result.stderr)
 """
@@ -134,7 +134,7 @@ print(result.stdout or result.stderr)
 inspect_block = """\
 import pandas as pd
 
-df = pd.read_csv("team_antigravity.csv")
+df = pd.read_csv("team_eclectic.csv")
 print(f"Total rows   : {len(df)}")
 print(f"Score range  : {df['score'].min():.4f} – {df['score'].max():.4f}")
 print(f"Score std    : {df['score'].std():.4f}")
@@ -149,7 +149,7 @@ for _, r in df.head(20).iterrows():
 # ── Build notebook cells ──────────────────────────────────────────────────────
 cells = [
     cell("markdown", [
-        "# 🌌 Team Antigravity — Intelligent Candidate Ranker\n",
+        "# 🌌 Team Eclectic — Intelligent Candidate Ranker\n",
         "\n",
         "> **Redrob India Runs Data & AI Challenge** — Senior AI Engineer Role  \n",
         "> Fully self-contained notebook. No external imports needed beyond `pandas`.\n",
@@ -225,8 +225,8 @@ notebook = {
     "cells": cells,
 }
 
-with open("antigravity_pipeline.ipynb", "w", encoding="utf-8") as f:
+with open("eclectic_pipeline.ipynb", "w", encoding="utf-8") as f:
     json.dump(notebook, f, indent=1, ensure_ascii=False)
 
-print("✅ antigravity_pipeline.ipynb generated successfully")
+print("✅ eclectic_pipeline.ipynb generated successfully")
 print(f"   Total cells: {len(cells)}")
