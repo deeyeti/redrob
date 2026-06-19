@@ -817,7 +817,7 @@ def score_availability(candidate: dict) -> Tuple[float, dict]:
     return combined, info
 
 
-def check_disqualifier(candidate: dict) -> float:
+def score_nlp_context(candidate: dict) -> float:
     """Returns a multiplier: 0.0 (exclude), 0.1 (soft disqualify), 1.0 (OK)."""
     career = candidate.get("career_history", [])
     profile = candidate.get("profile", {})
@@ -974,7 +974,7 @@ def score_candidate(candidate: dict) -> Optional[dict]:
     current_title = profile.get("current_title", "Unknown")
 
     # Step 2: Disqualifier multiplier
-    disqualifier_mult = check_disqualifier(candidate)
+    disqualifier_mult = score_nlp_context(candidate)
 
     # Step 3: Score components
     skill_score, matched_skills = score_skills(candidate)

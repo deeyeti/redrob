@@ -83,8 +83,8 @@ scoring_block = "\n\n".join([
     extract(rank_src, "def score_education", "def score_career_depth"),
     extract(rank_src, "def score_career_depth", "def score_company_context"),
     extract(rank_src, "def score_company_context", "def score_availability"),
-    extract(rank_src, "def score_availability", "def check_disqualifier"),
-    extract(rank_src, "def check_disqualifier", "# ============================================================\n# REASONING"),
+    extract(rank_src, "def score_availability", "def score_nlp_context"),
+    extract(rank_src, "def score_nlp_context", "# ============================================================\n# REASONING"),
 ])
 
 reasoning_block = extract(rank_src, "def generate_reasoning", "# ============================================================\n# MAIN")
