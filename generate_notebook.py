@@ -71,9 +71,8 @@ taxonomy_block += "\n\n"
 taxonomy_block += extract(rank_src, "# Keywords in career descriptions", "TODAY")
 taxonomy_block = taxonomy_block.rstrip()
 
-helpers_block = extract(rank_src, "def days_since", "# ============================================================\n# HONEYPOT")
+helpers_block = extract(rank_src, "def days_since", "# ============================================================\n# SCORING COMPONENTS")
 
-honeypot_block = extract(rank_src, "def is_honeypot", "# ============================================================\n# SCORING")
 
 scoring_block = "\n\n".join([
     extract(rank_src, "def score_skills", "def score_title"),
@@ -185,10 +184,7 @@ cells = [
     cell("markdown", ["## 3. Helper Functions"]),
     cell("code", helpers_block),
 
-    cell("markdown", ["## 4. Honeypot Detection (11 Checks)"]),
-    cell("code", honeypot_block),
-
-    cell("markdown", ["## 5. Scoring Components"]),
+    cell("markdown", ["## 4. Scoring Components"]),
     cell("code", scoring_block),
 
     cell("markdown", ["## 6. Reasoning Generation"]),

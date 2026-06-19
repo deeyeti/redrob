@@ -328,89 +328,6 @@ def get_title_tier(title: str) -> int:
 
 
 # ============================================================
-# HONEYPOT DETECTION
-# ============================================================
-
-def is_honeypot(candidate: dict) -> bool:
-    """
-    Return True if candidate exhibits data fabrication signals.
-    Checks 11 distinct patterns of impossible or implausible data.
-    """
-    career_history = candidate.get("career_history", [])
-    skills = candidate.get("skills", [])
-    profile = candidate.get("profile", {})
-    education = candidate.get("education", [])
-    signals = candidate.get("redrob_signals", {})
-    yoe = profile.get("years_of_experience", 0)
-
-    # 1. Career timeline reversal (end_date < start_date is physically impossible)
-    for job in career_history:
-        start = job.get("start_date")
-        end = job.get("end_date")
-        if start and end and end < start:
-            return True
-
-    # 2. Fake expertise: "expert" proficiency with 0 months usage
-    expert_zero = sum(
-        1 for sk in skills
-        if sk.get("proficiency") == "expert" and sk.get("duration_months", 1) == 0
-    )
-    if expert_zero >= 8:
-        return True
-
-    # 3. Physically impossible YoE
-    if yoe > 50:
-        return True
-
-    # 4. Education date reversal (graduating before enrolling)
-    for edu in education:
-        if edu.get("end_year", 9999) < edu.get("start_year", 0):
-            return True
-
-    # 5. Salary range inverted (min > max) - DISABLED (Too many false positives in synthetic data)
-    pass
-
-    # 6. Triple-perfect behavioral signals (statistically near-impossible)
-    rr = signals.get("recruiter_response_rate", 0)
-    ir = signals.get("interview_completion_rate", 0)
-    oa = signals.get("offer_acceptance_rate", -1)
-    if rr == 1.0 and ir == 1.0 and oa == 1.0:
-        return True
-
-    # 7. YoE vs sum of career durations mismatch > 10 years - DISABLED (Too aggressive)
-    pass
-
-    # 8. Four or more Redrob assessment scores at exactly 100
-    assessment_scores = signals.get("skill_assessment_scores", {})
-    if sum(1 for v in assessment_scores.values() if v >= 100.0) >= 4:
-        return True
-
-    # 9. Skill duration check — DISABLED for this dataset
-    # skill.duration_months and years_of_experience are generated independently
-    # in the synthetic data, making this check produce too many false positives.
-    # (Even at 2× threshold, 22K legitimate candidates were incorrectly excluded.)
-    pass
-
-    # 10. Duplicate career entries (same company + same start_date = copy-paste)
-    seen_jobs: set = set()
-    for job in career_history:
-        key = (job.get("company", "").lower().strip(), job.get("start_date", ""))
-        if key != ("", "") and key in seen_jobs:
-            return True
-        seen_jobs.add(key)
-
-    # 11. is_current=True job with a past end_date (logical contradiction)
-    today_str = str(TODAY)
-    for job in career_history:
-        if job.get("is_current", False):
-            end = job.get("end_date")
-            if end and end < today_str:
-                return True
-
-    return False
-
-
-# ============================================================
 # SCORING COMPONENTS
 # ============================================================
 
@@ -962,11 +879,7 @@ def generate_reasoning(candidate: dict, yoe: float, title: str,
 # ============================================================
 
 def score_candidate(candidate: dict) -> Optional[dict]:
-    """Score a single candidate. Returns None if honeypot detected."""
-
-    # Step 1: Honeypot check
-    if is_honeypot(candidate):
-        return None
+    """Score a single candidate."""
 
     candidate_id = candidate.get("candidate_id")
     profile = candidate.get("profile", {})
@@ -1078,28 +991,23 @@ def load_candidates(path: str):
 
 
 def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
-    results = []
+    # Statistics
     total = 0
-    honeypot_count = 0
     disqualified_count = 0
-
+    results = []
     print(f"Loading candidates from: {candidates_path}")
     for candidate in load_candidates(candidates_path):
         total += 1
         result = score_candidate(candidate)
-        if result is None:
-            honeypot_count += 1
-            continue
-        if result["_disqualifier"] < 0.5:
-            disqualified_count += 1
-        results.append(result)
-
+        if result:
+            results.append(result)
+            if "reasoning" in result and result["score"] < 0.1:
+                disqualified_count += 1
         if total % 10000 == 0:
             print(f"  Processed {total:,} candidates... ({len(results):,} scored)")
 
     print("\nProcessing complete:")
     print(f"  Total candidates: {total:,}")
-    print(f"  Honeypots filtered: {honeypot_count:,}")
     print(f"  Soft disqualified: {disqualified_count:,}")
     print(f"  Valid candidates: {len(results):,}")
 
