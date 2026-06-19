@@ -14,10 +14,32 @@ import json
 import argparse
 import math
 from datetime import date, datetime
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 import pandas as pd
 import re
 import collections
+
+# Optional NLP dependencies — gracefully disabled if not installed
+try:
+    import spacy as _spacy
+    _NLP_MODEL = _spacy.load("en_core_web_sm", disable=["ner"])
+except Exception:
+    _NLP_MODEL = None
+
+try:
+    from sentence_transformers import SentenceTransformer as _ST
+    import numpy as _np
+    _SMODEL = _ST("all-MiniLM-L6-v2")
+except Exception:
+    _SMODEL = None
+    _np = None
+
+# Ideal candidate description derived from the JD (used for MiniLM similarity)
+_JD_IDEAL = (
+    "Senior AI engineer with deep experience building production search and retrieval systems. "
+    "Expert in vector databases, embeddings, semantic search, learning to rank, hybrid search BM25 dense, "
+    "NLP, fine-tuning transformer models, deploying ML pipelines at scale, NDCG MRR evaluation."
+)
 
 # ============================================================
 # JD SKILL TAXONOMY
@@ -258,6 +280,7 @@ PRODUCTION_SIGNALS = [
 ]
 
 CAVEAT_PATTERNS = [
+    # Literal template phrases (from dataset generation)
     r"experimented with chatgpt",
     r"self-directed ml projects",
     r"transitioning toward more ai",
@@ -266,7 +289,37 @@ CAVEAT_PATTERNS = [
     r"lighter on technical depth",
     r"adjacent ml exposure",
     r"limited backend exposure",
-    r"haven't done much application development"
+    r"haven't done much application development",
+    # Semantic variants — catching genuine hobbyists
+    r"i(?:'m| am) (?:transitioning|pivoting|moving|exploring|learning|curious about)\b.{0,50}\b(?:ai|ml|machine learning|deep learning)",
+    r"(?:no|limited|minimal|little|lack)\s+(?:formal|direct|hands.on)?\s*(?:ml|ai|machine learning|deep learning)\s+(?:experience|background|exposure)",
+    r"(?:hobbyist|side project|passion project|pet project)\b.{0,60}\b(?:ai|ml|model|neural)",
+    r"building (?:my|a) (?:foundation|fundamentals|basics)\b.{0,40}\b(?:ai|ml|machine)",
+    r"(?:reading|taking|following)\s+(?:papers|books|courses|tutorials)\b.{0,40}\b(?:ai|ml|deep learning)",
+    r"(?:looking to|want to|hope to|plan to)\b.{0,40}\b(?:break into|enter|move into|transition to)\b.{0,30}\b(?:ai|ml|machine learning)",
+    r"(?:casually|occasionally|sometimes|rarely)\b.{0,40}\b(?:use|used|tried|played with)\b.{0,30}\b(?:ai|ml|model|gpt|llm)",
+]
+
+# Positive NLP patterns — reward genuine deep ML practitioners
+POSITIVE_NLP_PATTERNS = [
+    # Ownership verbs + retrieval/search/ranking objects
+    r"(?:built|designed|architected|led|owned|developed|implemented|deployed|shipped|scaled)\b.{0,80}\b(?:retrieval|search|ranking|recommendation|embedding|pipeline|rag|llm|vector|index)",
+    # Quantified scale claims
+    r"\d+[\s]?[kmb](?:illion)?\+?\s*(?:queries|requests|documents|users|records|items)\b",
+    # Quantified metric impact
+    r"(?:improved|reduced|increased|boosted|cut|achieved|drove|lifted)\b.{0,60}\b(?:latency|ndcg|mrr|recall|precision|throughput|accuracy|p95|p99)\b.{0,40}\b(?:\d+[%x×]|percentage|points)",
+    # Architecture specifics
+    r"(?:hybrid|dense|sparse)\s+(?:retrieval|search|index|re.?rank)",
+    r"(?:fine.tun|lora|qlora|peft|adapter)\b.{0,60}\b(?:model|bert|llm|transformer)",
+    r"(?:cross.encoder|bi.encoder|rerank|re-rank|two.stage|multi.stage)\b",
+    r"(?:bm25|tfidf|tf.idf)\b.{0,50}\b(?:dense|embedding|vector|neural)",
+    r"(?:faiss|qdrant|weaviate|milvus|pinecone|opensearch|elasticsearch)\b.{0,60}\b(?:index|deploy|produc|build|migrat)",
+    # Rigorous offline/online evaluation
+    r"(?:a/b\s+test|experiment|holdout|eval(?:uation)?)\b.{0,60}\b(?:ndcg|mrr|recall|precision|online|offline)",
+    r"(?:designed|built|ran|automated)\b.{0,60}\b(?:eval(?:uation)?\s+(?:framework|harness|pipeline|suite))",
+    # LLM production work
+    r"(?:llm|gpt|claude|mistral|llama)\b.{0,60}\b(?:produc|deploy|serve|latency|throughput|cost|inference)",
+    r"(?:prompt\s+engineering|chain.of.thought|rag\s+pipeline|grounding|hallucination)\b",
 ]
 
 
@@ -734,8 +787,43 @@ def score_availability(candidate: dict) -> Tuple[float, dict]:
     return combined, info
 
 
+def _extract_verb_objects(text: str) -> Dict[str, List[str]]:
+    """Use spaCy to extract (verb → [objects]) from text (first 500 chars).
+    Returns dict keyed by verb lemma. Only called when _NLP_MODEL is available."""
+    out: Dict[str, List[str]] = collections.defaultdict(list)
+    doc = _NLP_MODEL(text[:500])
+    for token in doc:
+        if token.pos_ == "VERB" and token.dep_ in ("ROOT", "relcl", "advcl", "ccomp"):
+            objs = [
+                child.lemma_.lower() for child in token.children
+                if child.dep_ in ("dobj", "attr", "pobj", "nsubjpass") and len(child.text) > 2
+            ]
+            if objs:
+                out[token.lemma_.lower()].extend(objs)
+    return dict(out)
+
+
+# Strong ownership verbs — subject built/shipped something
+_STRONG_VERBS = frozenset([
+    "build", "design", "architect", "develop", "implement", "deploy",
+    "ship", "scale", "own", "lead", "drive", "launch", "migrate",
+    "create", "write", "train", "fine-tune", "optimize",
+])
+# Weak verbs — subject is only familiar with something
+_WEAK_VERBS = frozenset([
+    "know", "learn", "explore", "experiment", "try", "play",
+    "familiarize", "study", "read", "understand", "expose",
+])
+# JD-relevant object nouns
+_JD_NOUNS = frozenset([
+    "pipeline", "system", "model", "retrieval", "search", "index", "embedding",
+    "ranker", "ranking", "recommendation", "vector", "encoder", "llm",
+    "transformer", "rag", "evaluation", "experiment", "service", "api",
+])
+
+
 def score_nlp_context(candidate: dict) -> float:
-    """Returns a multiplier: 0.0 (exclude), 0.1 (soft disqualify), 1.0 (OK)."""
+    """Returns a multiplier: 0.05 (near-exclude) … 1.3 (strong positive NLP signal)."""
     career = candidate.get("career_history", [])
     profile = candidate.get("profile", {})
     skills = candidate.get("skills", [])
@@ -749,37 +837,74 @@ def score_nlp_context(candidate: dict) -> float:
         if all_consulting:
             return 0.1
 
-    # Determine if this candidate has ANY meaningful ML/AI signal anywhere
+    # Build full text blob (skills + titles + headline + summary + descriptions)
     skill_names = " ".join(sk.get("name", "").lower() for sk in skills)
     career_titles = " ".join(job.get("title", "").lower() for job in career)
+    career_descs = " ".join(job.get("description", "").lower() for job in career)
     headline = profile.get("headline", "").lower()
     summary = profile.get("summary", "").lower()
+    full_text = " ".join([skill_names, career_titles, headline, summary, career_descs])
 
-    ml_keywords = [
-        "machine learning", "deep learning", "nlp", "natural language",
-        "pytorch", "tensorflow", "scikit", "sklearn", "python",
-        "data science", "artificial intelligence", "neural", "embedding",
-        "transformer", "llm", "retrieval", "vector", "faiss", "bert",
-        "recommendation", "ranking", "ml engineer", "ai engineer",
-        "data scientist", "mlops", "model", "xgboost", "lightgbm",
-    ]
-    full_text = " ".join([skill_names, career_titles, headline, summary])
-    has_ml_signal = any(kw in full_text for kw in ml_keywords)
+    # Count how many genuine JD core ML skills this candidate has in their skills section
+    skill_names_list = [sk.get("name", "").lower() for sk in skills]
+    strong_ml_skill_count = sum(
+        1 for s in skill_names_list
+        if s in JD_CORE_SKILLS or s in JD_NICE_SKILLS
+    )
+    has_strong_ml_skills = strong_ml_skill_count >= 2
+
+    # --- Layer 1: Caveat detection (penalty) ---
+    # Only penalize if the candidate ALSO has weak ML skills.
+    # A genuine Senior NLP Engineer can mention a past ChatGPT experiment without being penalized.
+    if not has_strong_ml_skills:
+        for pat in CAVEAT_PATTERNS:
+            if re.search(pat, full_text):
+                return 0.3
+
+    multiplier = 1.0
+
+    # --- Layer 1: Positive regex boosting ---
+    positive_hits = sum(1 for pat in POSITIVE_NLP_PATTERNS if re.search(pat, full_text))
+    if positive_hits >= 3:
+        multiplier *= 1.08  # max +8% bonus for multiple strong signals
+    elif positive_hits >= 1:
+        multiplier *= 1.04  # +4% for any positive signal
+
+    # --- Layer 2: spaCy verb-object extraction ---
+    if _NLP_MODEL is not None:
+        combined_text = (summary + " " + career_descs)[:800]
+        vo = _extract_verb_objects(combined_text)
+        strong_jd_hits = sum(
+            1 for v, objs in vo.items()
+            if v in _STRONG_VERBS and any(o in _JD_NOUNS for o in objs)
+        )
+        weak_jd_hits = sum(
+            1 for v, objs in vo.items()
+            if v in _WEAK_VERBS and any(o in _JD_NOUNS for o in objs)
+        )
+        if strong_jd_hits >= 2:
+            multiplier *= 1.05  # +5% for multiple strong ownership verbs
+        elif strong_jd_hits == 1:
+            multiplier *= 1.02  # +2% for one
+        if weak_jd_hits >= 2 and strong_jd_hits == 0:
+            multiplier *= 0.95  # -5% if only "familiar with" verbs, no ownership
 
     # Check current title tier
     current_tier = get_title_tier(profile.get("current_title", ""))
-
-    # Also check best career title tier
     best_career_tier = min(
         (get_title_tier(job.get("title", "")) for job in career),
         default=3
     )
-
     # Hard non-tech: tier 0 current title AND no ML signal anywhere
+    ml_keywords = [
+        "machine learning", "deep learning", "nlp", "neural", "embedding",
+        "transformer", "llm", "retrieval", "vector", "ranking", "ml engineer",
+    ]
+    has_ml_signal = any(kw in full_text for kw in ml_keywords)
     if current_tier == 0 and best_career_tier >= 2 and not has_ml_signal:
-        return 0.05  # near-exclude (won't make top 100 anyway)
+        return 0.05
 
-    return 1.0
+    return min(multiplier, 1.15)  # Cap at +15% total NLP bonus
 
 
 # ============================================================
@@ -878,16 +1003,31 @@ def generate_reasoning(candidate: dict, yoe: float, title: str,
 # MAIN SCORING FUNCTION
 # ============================================================
 
-def score_candidate(candidate: dict) -> Optional[dict]:
-    """Score a single candidate."""
+def score_candidate(candidate: dict, jd_sim: float = 0.5) -> Optional[dict]:
+    """Score a single candidate. jd_sim is MiniLM cosine sim to ideal JD (0-1)."""
 
     candidate_id = candidate.get("candidate_id")
     profile = candidate.get("profile", {})
     yoe = profile.get("years_of_experience", 0)
     current_title = profile.get("current_title", "Unknown")
 
-    # Step 2: Disqualifier multiplier
+    # Step 2: Disqualifier + NLP context multiplier
     disqualifier_mult = score_nlp_context(candidate)
+
+    # Step 2b: MiniLM semantic similarity multiplier (Layer 3)
+    # MiniLM cosine sims have a ~0.3 baseline even for unrelated texts.
+    # Anchored at sim=0.45 (neutral SWE), range kept tight [0.93, 1.07]
+    # to fine-tune without overriding base scoring differentiation:
+    #   sim=0.20 (irrelevant) -> 0.93x slight penalty
+    #   sim=0.33 (HR manager) -> 0.93x slight penalty
+    #   sim=0.45 (neutral SWE) -> 1.00x neutral
+    #   sim=0.55 (ML engineer) -> 1.04x slight bonus
+    #   sim=0.75+ (perfect match) -> 1.07x (capped)
+    if _SMODEL is not None:
+        jd_sim_mult = 1.0 + 0.7 * (jd_sim - 0.45)
+        jd_sim_mult = max(0.93, min(1.07, jd_sim_mult))
+    else:
+        jd_sim_mult = 1.0
 
     # Step 3: Score components
     skill_score, matched_skills = score_skills(candidate)
@@ -913,7 +1053,7 @@ def score_candidate(candidate: dict) -> Optional[dict]:
         + 0.04 * availability_sc
     )
 
-    final_score = round(max(0.0, min(1.0, raw_score * disqualifier_mult)), 4)
+    final_score = round(max(0.0, raw_score * disqualifier_mult * jd_sim_mult), 4)
 
     # Step 5: Rich reasoning
     reasoning = generate_reasoning(
@@ -990,7 +1130,40 @@ def load_candidates(path: str):
                 continue
 
 
+def _build_jd_sim_map(candidates_path: str) -> Dict[str, float]:
+    """Layer 3: Batch-encode all summaries with MiniLM, return {candidate_id: cosine_sim}."""
+    if _SMODEL is None or _np is None:
+        return {}
+
+    print("  [NLP Layer 3] Loading summaries for MiniLM encoding...")
+    ids, texts = [], []
+    for c in load_candidates(candidates_path):
+        cid = c.get("candidate_id", "")
+        summary = c.get("profile", {}).get("summary", "") or ""
+        desc = " ".join(j.get("description", "") for j in c.get("career_history", []))[:300]
+        ids.append(cid)
+        texts.append((summary + " " + desc)[:512])
+
+    jd_vec = _SMODEL.encode(_JD_IDEAL, convert_to_numpy=True, normalize_embeddings=True)
+    print(f"  [NLP Layer 3] Encoding {len(texts):,} summaries in batches...")
+    cand_vecs = _SMODEL.encode(
+        texts,
+        batch_size=512,
+        show_progress_bar=False,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    )
+    sims = (cand_vecs @ jd_vec).tolist()  # cosine sim (vecs are normalized)
+    print("  [NLP Layer 3] Done.")
+    return dict(zip(ids, sims))
+
+
 def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
+    # Layer 3 pre-pass: batch MiniLM encoding (skipped gracefully if not installed)
+    jd_sim_map = _build_jd_sim_map(candidates_path)
+    if jd_sim_map:
+        print(f"  [NLP Layer 3] JD similarity computed for {len(jd_sim_map):,} candidates.")
+
     # Statistics
     total = 0
     disqualified_count = 0
@@ -998,7 +1171,9 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
     print(f"Loading candidates from: {candidates_path}")
     for candidate in load_candidates(candidates_path):
         total += 1
-        result = score_candidate(candidate)
+        cid = candidate.get("candidate_id", "")
+        jd_sim = jd_sim_map.get(cid, 0.5)  # default neutral if not found
+        result = score_candidate(candidate, jd_sim=jd_sim)
         if result:
             results.append(result)
             if "reasoning" in result and result["score"] < 0.1:
@@ -1010,6 +1185,15 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
     print(f"  Total candidates: {total:,}")
     print(f"  Soft disqualified: {disqualified_count:,}")
     print(f"  Valid candidates: {len(results):,}")
+
+    # Min-max normalize scores to [0.01, 1.00] so top candidates
+    # aren't bunched at 1.0 due to multiplier saturation.
+    # Relative ordering is fully preserved.
+    all_scores = [r["score"] for r in results]
+    s_min, s_max = min(all_scores), max(all_scores)
+    if s_max > s_min:
+        for r in results:
+            r["score"] = round(0.01 + 0.99 * (r["score"] - s_min) / (s_max - s_min), 4)
 
     # Sort: primary by score desc, secondary by candidate_id asc (tie-break rule)
     df = pd.DataFrame(results)

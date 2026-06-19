@@ -46,14 +46,46 @@ import json
 import argparse
 import math
 from datetime import date, datetime
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 import pandas as pd
 import re
 import collections
-import concurrent.futures
 
 TODAY = date.today()
 print(f"Pipeline ready. Today = {TODAY}")
+"""
+
+nlp_imports_block = """\
+# ── Optional NLP dependencies (graceful fallback if not installed) ─────────────
+try:
+    import subprocess, sys
+    subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm", "-q"], check=False)
+except Exception:
+    pass
+
+try:
+    import spacy as _spacy
+    _NLP_MODEL = _spacy.load("en_core_web_sm", disable=["ner", "lemmatizer"])
+    print("✅ spaCy loaded (Layer 2: verb-object NER active)")
+except Exception:
+    _NLP_MODEL = None
+    print("⚠️  spaCy not available — Layer 2 NER disabled (scores unaffected)")
+
+try:
+    from sentence_transformers import SentenceTransformer as _ST
+    import numpy as _np
+    _SMODEL = _ST("all-MiniLM-L6-v2")
+    print("✅ sentence-transformers loaded (Layer 3: MiniLM JD similarity active)")
+except Exception:
+    _SMODEL = None
+    _np = None
+    print("⚠️  sentence-transformers not available — Layer 3 disabled (scores unaffected)")
+
+_JD_IDEAL = (
+    "Senior AI engineer with deep experience building production search and retrieval systems. "
+    "Expert in vector databases, embeddings, semantic search, learning to rank, hybrid search BM25 dense, "
+    "NLP, fine-tuning transformer models, deploying ML pipelines at scale, NDCG MRR evaluation."
+)
 """
 
 taxonomy_block = extract(rank_src, "JD_CORE_SKILLS", "# ============================================================\n# TITLE")
@@ -71,8 +103,9 @@ taxonomy_block += "\n\n"
 taxonomy_block += extract(rank_src, "# Keywords in career descriptions", "TODAY")
 taxonomy_block = taxonomy_block.rstrip()
 
-helpers_block = extract(rank_src, "def days_since", "# ============================================================\n# SCORING COMPONENTS")
+helpers_block = extract(rank_src, "def days_since", "def score_skills")
 
+nlp_helpers_block = extract(rank_src, "def _extract_verb_objects", "def score_nlp_context")
 
 scoring_block = "\n\n".join([
     extract(rank_src, "def score_skills", "def score_title"),
@@ -82,8 +115,8 @@ scoring_block = "\n\n".join([
     extract(rank_src, "def score_education", "def score_career_depth"),
     extract(rank_src, "def score_career_depth", "def score_company_context"),
     extract(rank_src, "def score_company_context", "def score_availability"),
-    extract(rank_src, "def score_availability", "def score_nlp_context"),
-    extract(rank_src, "def score_nlp_context", "# ============================================================\n# REASONING"),
+    extract(rank_src, "def score_availability", "def _extract_verb_objects"),
+    extract(rank_src, "def score_nlp_context", "def generate_reasoning"),
 ])
 
 reasoning_block = extract(rank_src, "def generate_reasoning", "# ============================================================\n# MAIN")
@@ -166,11 +199,10 @@ cells = [
         "| Education | 4% | Institution tier + field relevance |\n",
         "| Availability | 4% | Notice period + open-to-work + location |\n",
         "\n",
-        "## Honeypot Detection (11 checks)\n",
-        "Career date reversal · Fake expert skills (zero months) · Impossible YoE · Education date reversal · "
-        "Inverted salary range · Triple-perfect behavioral signals · YoE vs career duration mismatch · "
-        "All assessment scores = 100 · Skill duration > career length · Duplicate jobs · "
-        "is_current=True with past end_date\n",
+        "## NLP Enrichment Layers\n",
+        "- **Layer 1** — Advanced regex: caveat detection (ChatGPT hobbyists) + positive boosting (built/shipped retrieval systems)\n",
+        "- **Layer 2** — spaCy verb-object NER: `built pipeline` vs `familiar with pipeline` distinction\n",
+        "- **Layer 3** — MiniLM semantic similarity: cosine distance to ideal JD description\n",
         "\n",
         "**Runtime**: ~50s for 100K candidates · CPU only · No network · ≤2GB RAM",
     ]),
@@ -178,13 +210,19 @@ cells = [
     cell("markdown", ["## 1. Imports"]),
     cell("code", imports_block),
 
+    cell("markdown", ["## 2. NLP Setup (spaCy + MiniLM)"]),
+    cell("code", nlp_imports_block),
+
     cell("markdown", ["## 2. JD Skill Taxonomy & Role Tiers"]),
     cell("code", taxonomy_block),
 
     cell("markdown", ["## 3. Helper Functions"]),
     cell("code", helpers_block),
 
-    cell("markdown", ["## 4. Scoring Components"]),
+    cell("markdown", ["## 4. NLP Helper Functions (spaCy verb-object extraction)"]),
+    cell("code", nlp_helpers_block),
+
+    cell("markdown", ["## 5. Scoring Components"]),
     cell("code", scoring_block),
 
     cell("markdown", ["## 6. Reasoning Generation"]),
