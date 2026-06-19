@@ -18,7 +18,6 @@ from typing import Optional, Tuple, List
 import pandas as pd
 import re
 import collections
-import concurrent.futures
 
 # ============================================================
 # JD SKILL TAXONOMY
@@ -902,7 +901,7 @@ def generate_reasoning(candidate: dict, yoe: float, title: str,
     prod_signals = depth_info.get("production_signals", 0)
     ml_kws = depth_info.get("ml_keywords_found", 0)
     if prod_signals >= 3:
-        parts.append(f"strong production deployment evidence")
+        parts.append("strong production deployment evidence")
     elif ml_kws >= 5:
         parts.append(f"solid ML domain depth ({ml_kws} JD concepts in career text)")
 
@@ -1098,7 +1097,7 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
         if total % 10000 == 0:
             print(f"  Processed {total:,} candidates... ({len(results):,} scored)")
 
-    print(f"\nProcessing complete:")
+    print("\nProcessing complete:")
     print(f"  Total candidates: {total:,}")
     print(f"  Honeypots filtered: {honeypot_count:,}")
     print(f"  Soft disqualified: {disqualified_count:,}")
@@ -1116,7 +1115,7 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
     df_top = df.head(n_top).copy()
     df_top["rank"] = range(1, n_top + 1)
 
-    print(f"\nTop 10 candidates:")
+    print("\nTop 10 candidates:")
     for _, row in df_top.head(10).iterrows():
         print(f"  Rank {int(row['rank'])}: {row['candidate_id']} | score={row['score']:.4f} | {row['reasoning'][:80]}...")
 

@@ -2,7 +2,7 @@
 Generates antigravity_pipeline.ipynb — a fully self-contained notebook
 that embeds all the ranking code directly (no imports from rank.py).
 """
-import json, textwrap
+import json
 
 def cell(cell_type, source, **kwargs):
     if cell_type == "markdown":

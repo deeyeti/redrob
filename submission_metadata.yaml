@@ -8,12 +8,12 @@ team_name: "team_antigravity"
 
 primary_contact:
   name: "Team Antigravity"
-  email: ""        # fill before portal submission
-  phone: ""        # fill before portal submission
+  email: "omarunthombre@gmail.com"        # fill before portal submission
+  phone: "+971 50 906 4610/ +91 85917 30489"        # fill before portal submission
 
 team_members:
   - name: "Team Antigravity"
-    email: ""
+    email: "omarunthombre@gmail.com"
     role: "ML Engineer / Team Lead"
 
 # ============================================================================
