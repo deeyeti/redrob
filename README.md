@@ -1,338 +1,242 @@
-# Team Eclectic — Redrob India Runs Hackathon Submission
+# Team Eclectic — Redrob Hackathon Submission
 
-## Intelligent Candidate Discovery & Ranking System
-
-**Challenge:** Redrob India Runs Data & AI Challenge
-**Problem Statement:** Intelligent Candidate Discovery & Ranking for a Senior AI Engineer Role
-**Team:** Eclectic
+> **Challenge**: Redrob India Runs Data & AI Challenge  
+> **Task**: Intelligent Candidate Discovery & Ranking — Senior AI Engineer role  
+> **Team**: Eclectic
 
 ---
 
-# Executive Summary
+## 🎯 Problem Statement
 
-We developed a high-performance, explainable candidate ranking engine designed to identify and prioritize the most relevant candidates for a **Senior AI Engineer** position from a pool of **100,000 candidate profiles**.
+Given a dataset of 100,000 candidate profiles (`candidates.jsonl`) and a job description for a **Senior AI Engineer** at a Series A AI-native company, rank the **top 100 best-fit candidates** and output them with scores and explicit reasoning.
 
-The solution leverages a **multi-signal ranking architecture** that combines structured skill intelligence, experience evaluation, behavioral indicators, career progression analysis, company context, educational background, and candidate availability into a unified ranking framework.
-
-Unlike traditional Applicant Tracking Systems (ATS) that rely heavily on keyword matching, our approach performs **context-aware candidate evaluation**, producing transparent rankings supported by evidence-based reasoning. The system is fully CPU-based, requires no external APIs or pre-trained models during inference, and processes the complete dataset within seconds while remaining compliant with all competition constraints.
+**Evaluation**: NDCG@10 (50%) · NDCG@50 (30%) · MAP (15%) · P@10 (5%)
 
 ---
 
-# Problem Statement
+## 🏗️ Approach
 
-The objective is to identify and rank the **Top 100 most relevant candidates** for a Senior AI Engineer position using a dataset containing over **100,000 candidate profiles**.
-
-The ranking system must:
-
-* Accurately understand job requirements.
-* Evaluate candidate suitability across multiple dimensions.
-* Generate explainable ranking decisions.
-* Detect low-quality or suspicious candidate profiles.
-* Operate under strict runtime and compute constraints.
-* Produce recruiter-ready recommendations at scale.
-
-Evaluation metrics include:
-
-* NDCG@10 (50%)
-* NDCG@50 (30%)
-* MAP (15%)
-* Precision@10 (5%)
+A **multi-signal, two-stage JD-aware ranker** built with intelligent evaluation layers, combining deterministic heuristics, TF-IDF, and multiple NLP/ML-based semantic signals. Processes all 100K candidates in **~90 seconds** on a standard modern CPU.
 
 ---
 
-# Solution Overview
+## ⚙️ Two-Stage Pipeline Architecture
 
-Our solution implements a **JD-aware, multi-factor candidate ranking framework** that evaluates candidates using a weighted combination of technical, professional, and behavioral signals.
+### Stage 1 — Fast Scan (All 100K Candidates)
 
-### Core Capabilities
+Every candidate is evaluated by a **weighted 8-component scoring engine** combined with a **3-layer NLP multiplier** applied simultaneously.
 
-* Intelligent Job Description understanding
-* Multi-dimensional candidate assessment
-* Explainable AI-based ranking
-* Candidate quality validation
-* High-throughput large-scale processing
-* CPU-only execution with zero external dependencies
+#### 🧠 Core Scoring Architecture (8 Components)
 
-### Key Differentiators
+| Component | Weight | Description |
+|---|---|---|
+| **Skill Match** | 35% | Keyword + TF-IDF scoring against 80+ JD skills |
+| **Title / Role Fit** | 17% | 4-tier role taxonomy aligned to JD requirements |
+| **YoE Fit** | 13% | Optimal band of 6–8 years, steep penalties outside |
+| **Behavioral Signals** | 14% | 6 platform signals (response, GitHub, recency, saves) |
+| **Career Depth** | 7% | ML keyword breadth + production deployment evidence |
+| **Company Context** | 6% | Product vs. consulting background, company size |
+| **Education Tier** | 4% | Tier 1–4 institution + relevant field bonus |
+| **Availability** | 4% | Notice period, location fit, open-to-work flag |
 
-* Goes beyond keyword-based candidate filtering.
-* Evaluates real-world AI engineering experience and production impact.
-* Incorporates recruiter engagement and hiring-readiness signals.
-* Rewards demonstrated deployment and business impact.
-* Produces transparent, recruiter-friendly explanations.
-* Detects profile inconsistencies and suspicious candidate patterns.
-
----
-
-# Ranking Architecture
-
-The final ranking score is generated using a weighted ensemble of independent candidate signals.
-
-| Component              | Weight | Purpose                                       |
-| ---------------------- | ------ | --------------------------------------------- |
-| Skill Match            | 35%    | Technical alignment with JD requirements      |
-| Title & Role Relevance | 17%    | Role similarity and seniority alignment       |
-| Experience Fit         | 13%    | Years-of-experience suitability               |
-| Behavioral Signals     | 14%    | Recruiter engagement and hiring readiness     |
-| Career Depth           | 7%     | Demonstrated impact and production experience |
-| Company Context        | 6%     | Industry and organizational relevance         |
-| Education              | 4%     | Academic pedigree and field relevance         |
-| Availability           | 4%     | Joining readiness and location suitability    |
+**Final Stage 1 Score** = `raw_score × nlp_multiplier × minilm_sim_multiplier`
 
 ---
 
-# Candidate Intelligence Framework
+#### 📐 Skill Match — Component Detail
 
-## Skill Match Engine (35%)
+The skill score is built from three sub-signals combined as `0.60 × core_norm + 0.15 × nice_norm + 0.25 × tfidf_norm`:
 
-The skill matching layer evaluates candidates using:
+1. **Core Skills (60%)** — 80+ JD-specific skill keywords (embeddings, FAISS, RAG, LoRA, BM25, etc.), each with a base weight (0.3–1.0). Proficiency level, duration in months, and assessment scores all modulate each keyword's weight.
+2. **Nice-to-Have Skills (15%)** — 22 adjacent skills (Docker, Kafka, XGBoost, etc.) at reduced weight.
+3. **TF-IDF Similarity (25%)** — Token overlap between the candidate's full text blob (skills + titles + descriptions) and the JD text, using term frequency scaled by JD frequency.
 
-* Handcrafted Senior AI Engineer skill taxonomy
-* Pure-Python TF-IDF relevance scoring
-* Skill synonym normalization
-* Proficiency-weighted scoring
-* Experience-duration weighting
-
-The taxonomy includes critical AI competencies such as:
-
-* Machine Learning
-* Deep Learning
-* NLP
-* Transformers
-* BERT
-* Sentence Transformers
-* Embeddings
-* Retrieval Systems
-* Vector Search
-* Semantic Search
-* RAG Pipelines
-* LLM Applications
-* Python Ecosystem
+Skill synonyms are normalised before matching (`llm → large language model`, `k8s → kubernetes`, etc.).
 
 ---
 
-## Role Alignment Engine (17%)
+#### 🏷️ Title / Role Taxonomy
 
-Candidates are categorized using a role hierarchy:
+Titles are classified into 4 tiers:
 
-### Tier 1 (Highest Relevance)
+| Tier | Score | Examples |
+|---|---|---|
+| **Tier 1** | 1.00 | ML Engineer, AI Engineer, NLP Engineer, Ranking Engineer, Data Scientist |
+| **Tier 2** | 0.55 | Software Engineer, Backend Engineer, Data Engineer, Cloud Engineer |
+| **Tier 3** | 0.15 | Frontend Engineer, Mobile Developer, Java Developer, QA Engineer |
+| **Tier 0** | 0.00 | HR Manager, Sales Executive, Civil Engineer, Graphic Designer |
 
-* AI Engineer
-* Machine Learning Engineer
-* NLP Engineer
-* Applied Scientist
-* AI Research Engineer
-
-### Tier 2
-
-* Software Engineer
-* Backend Engineer
-* Platform Engineer
-
-### Tier 3
-
-* Frontend Engineer
-* QA Engineer
-* Support Roles
-
-### Tier 4
-
-* Non-Technical Roles
-
-This ensures preference for candidates whose career trajectory closely aligns with the target position.
+The effective tier is the **best** of the current title and entire career history.
 
 ---
 
-## Experience Evaluation (13%)
+#### 📊 Behavioral Signals — 6 Platform Metrics
 
-The experience component evaluates candidate suitability against the JD's preferred experience range.
-
-### Target Window
-
-* Preferred Range: 5–9 Years
-* Optimal Range: 6–8 Years
-
-Candidates closest to the ideal experience band receive maximum scores, while scores gradually taper for underqualified or overqualified profiles.
-
----
-
-## Behavioral Intelligence (14%)
-
-Behavioral indicators provide insights into candidate responsiveness and hiring readiness.
-
-Signals considered include:
-
-* Recruiter Response Rate
-* Interview Completion Rate
-* GitHub Activity Score
-* Profile Recency
-* Recruiter Save Frequency
-* Profile Completeness
-
-These signals help identify candidates who are more likely to engage successfully during the hiring process.
+| Signal | Weight |
+|---|---|
+| `recruiter_response_rate` | 35% |
+| `interview_completion_rate` | 25% |
+| `github_activity_score` | 15% |
+| `last_active_date` recency | 10% |
+| `saved_by_recruiters_30d` | 10% |
+| `profile_completeness_score` | 5% |
 
 ---
 
-## Career Depth Analysis (7%)
+#### 🏭 Career Depth — 2 Dimensions
 
-This component measures the practical depth of a candidate’s experience.
-
-Signals include:
-
-* AI/ML keyword diversity
-* Quantified business impact detection
-* Production deployment evidence
-* Engineering ownership indicators
-* Career description richness
-
-Examples of detected evidence:
-
-* "Improved latency by 20ms"
-* "Scaled platform to 5M users"
-* "Deployed recommendation system"
-* "Conducted A/B testing"
+1. **ML Keyword Breadth**: Unique domain terms found in career descriptions (embeddings, FAISS, transformer, RAG, etc.). 10+ unique terms = full score.
+2. **Production Evidence**: Count of impact phrases (deployed, shipped, at scale, 50ms latency, A/B test, NDCG improved, etc.) + quantified metric claims (%, x multipliers, $ figures). 6+ signals = full score.
 
 ---
 
-## Company Context Evaluation (6%)
+#### 🏢 Company Context — Product vs. Consulting
 
-The system evaluates employer relevance using:
-
-* Product vs Consulting company ratio
-* AI-native organization preference
-* SaaS, FinTech, EdTech, and Technology domain alignment
-* Company scale suitability
-
-Candidates from product-focused technology organizations receive higher relevance scores compared to consulting-heavy profiles.
+- **Rewards**: Product/tech company background (SaaS, AI-native, fintech), scaleup size (51–200 employees), current industry being tech-adjacent.
+- **Penalises**: Career spent at known consulting firms (TCS, Infosys, Wipro, Accenture, Cognizant, Capgemini, etc.) up to a 70% penalty.
 
 ---
 
-## Education Assessment (4%)
+#### 🌐 Availability Scoring
 
-Education is evaluated using:
-
-### Institution Quality
-
-* Tier 1: IITs, IISc, Top Global Universities
-* Tier 2: Premier Engineering Institutions
-* Tier 3: General Institutions
-
-### Field Relevance
-
-* Computer Science
-* Artificial Intelligence
-* Machine Learning
-* Data Science
-* Mathematics
-* Statistics
+- Notice period: ≤30d → 1.0, ≤60d → 0.6, ≤90d → 0.35, >90d → 0.1
+- Location: Pune/Noida → 1.0, Bangalore/Mumbai/Hyderabad → 0.75, willing to relocate → 0.6
+- Bonuses: Open-to-work flag (+0.3), willing to relocate (+0.1), hybrid/flexible mode preference (+0.1)
 
 ---
 
-## Availability Assessment (4%)
+#### 🧬 NLP Enrichment Layers (Stage 1 Multiplier)
 
-Candidate readiness is evaluated using:
+The base score is multiplied by a context-aware NLP signal (`score_nlp_context`) which applies three layers:
 
-* Notice Period
-* Open-to-Work Status
-* Geographic Alignment
-* Work Mode Preference
+**Layer 1 — Regex Caveat Detection & Positive Boosting**
+- **Penalty (→ 0.3x)**: If the candidate has weak ML skills AND phrases like "experimenting with ChatGPT", "transitioning to AI", "no formal ML experience", "hobbyist side project", or "taking courses in deep learning" appear in their full text.
+- **Bonus (+4–8%)**: If 1–3+ patterns matching strong ownership (`built/deployed/architected + retrieval/embedding/RAG/LLM`), quantified impact (`improved NDCG by 20%`), or system-design specifics (`hybrid BM25-dense retrieval`, `fine-tuned with LoRA`) are found.
 
-Candidates available sooner and aligned with preferred hiring locations receive higher scores.
+**Layer 2 — spaCy Verb-Object Dependency Parsing**
+- The Cython-optimized spaCy dependency parser processes up to **3,000 characters** of the combined profile and career descriptions (extended from 800 chars to capture deeper resume content).
+- Extracts verb → object pairs. Strong **ownership verbs** (`built`, `architected`, `shipped`, `deployed`, `trained`, `fine-tuned`) pointing at **JD nouns** (`pipeline`, `system`, `embedding`, `ranker`, `vector`, `RAG`, `LLM`) add a +2–5% multiplier.
+- Weak **familiarity verbs** (`explored`, `experimented`, `learned`, `studied`, `read`) pointing at the same nouns with no ownership counterpart subtract 5%.
 
----
+**Layer 3 — MiniLM Bi-Encoder Semantic Similarity**
+- All candidate summaries + career descriptions (up to 512 chars) are batch-encoded with `all-MiniLM-L6-v2`.
+- Cosine similarity to a hand-crafted JD-derived ideal embedding is computed via a dot product (vecs are pre-normalised).
+- Similarity is mapped to a tight multiplier: `sim=0.45 → 1.00x` (neutral), `sim=0.75+ → 1.07x` (capped), `sim<0.33 → 0.93x` (mild penalty). This fine-tunes rankings without overriding base score differentiation.
 
-# Candidate Validation Framework
-
-To improve ranking quality, a dedicated validation layer identifies suspicious or low-quality profiles.
-
-## Hard Exclusion Rules
-
-Profiles are automatically removed if:
-
-* Employment dates are inconsistent
-* Years of experience exceed realistic thresholds
-* Multiple expert-level skills show zero practical duration
-
-## Soft Penalty Rules
-
-Profiles receive substantial score reductions if:
-
-* Entire career history consists exclusively of large consulting organizations
-* Limited evidence of product ownership or AI deployment exists
-
-This improves precision while preserving potentially valuable edge-case candidates.
+**Hard Disqualifiers**:
+- Entire career at consulting firms (2+ jobs) → multiplier 0.10
+- Tier-0 non-tech title (graphic designer, HR manager) with no ML signal in full text → multiplier 0.05
 
 ---
 
-# Explainability Engine
+### Stage 2 — Deep Re-Ranking (Top 1,000 Candidates)
 
-Every recommendation is accompanied by a structured explanation containing:
+After Stage 1 filters and ranks all 100K candidates, the **Top 1,000** are passed to two computationally heavier NLP models for precise semantic re-scoring.
 
-* Current designation
-* Total years of experience
-* Top matched technical skills
-* Industry and company context
-* Production deployment evidence
-* Recruiter engagement indicators
-* Availability insights
-* Potential concerns or risks
+#### 🔁 Cross-Encoder Re-Ranking (`cross-encoder/ms-marco-MiniLM-L-6-v2`)
 
-This ensures every ranking decision remains transparent, auditable, and recruiter-friendly.
+Unlike the bi-encoder (which encodes JD and candidate separately), the Cross-Encoder evaluates the JD ideal text **paired with** each candidate's 1,500-character profile at the same time, enabling deep cross-attention between the two.
 
----
+- Outputs a relevance logit per candidate.
+- Logit is passed through a sigmoid function and remapped to `[0.8x, 1.2x]` multiplicative range.
+- Run in batches of 32 for CPU efficiency.
 
-# Performance & Scalability
+#### 🔍 Implicit Skill Extraction (`cross-encoder/nli-distilroberta-base` — Zero-Shot NLI)
 
-The solution was specifically engineered for large-scale candidate evaluation.
+Candidates frequently describe using skills in their narrative without ever listing them formally. The Zero-Shot classifier evaluates each candidate's career text for **entailment** of 4 critical JD concepts:
 
-### Processing Statistics
+- `"Vector Databases"`
+- `"LLM Fine-tuning"`
+- `"Learning to Rank"`
+- `"Semantic Search"`
 
-* Candidate Profiles Processed: 100,000+
-* Ranking Output: Top 100 Candidates
-* Runtime: ~10–15 Seconds
-* Memory Usage: < 2 GB
-* Compute Requirement: CPU Only
-* External API Calls: None
+If confidence > 60% that the text entails a concept, it is treated as an implicit skill detected. Each implicit skill found adds **+5% to the final score** (up to +20% for all 4).
 
-### Competition Compliance
-
-| Requirement    | Constraint  | Result          |
-| -------------- | ----------- | --------------- |
-| Runtime        | ≤ 5 Minutes | ~10–15 Seconds  |
-| Memory         | ≤ 16 GB     | < 2 GB          |
-| CPU Execution  | Required    | Achieved        |
-| External Calls | Not Allowed | Fully Compliant |
+The reasoning string in the output CSV is also updated to append `implicitly detected skills: Vector Databases, LLM Fine-tuning` so recruiters can see exactly why the candidate was boosted.
 
 ---
 
-# Key Design Decisions
+## 🚀 How to Run
 
-### Why Not Use LLMs for Ranking?
+### Install Dependencies
 
-Large Language Models introduce significant computational overhead and would violate runtime constraints when evaluating 100,000 profiles. Our structured scoring framework provides greater scalability, consistency, and reproducibility.
+```bash
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+```
 
-### Why Not Rely Solely on Text Similarity?
+### Generate Submission
 
-Candidate quality extends beyond textual similarity. Critical signals such as recruiter engagement, experience quality, availability, and production deployment history cannot be accurately captured using text matching alone.
+```bash
+# Full run (100K candidates)
+python rank.py --candidates candidates.jsonl --out team_eclectic.csv
 
-### Why Analyze Career Descriptions Separately?
+# Quick test run (50-candidate sample)
+python rank.py --candidates sample_candidates.json --out team_eclectic.csv
+```
 
-Many candidates mention advanced AI technologies and production systems within project descriptions without explicitly listing them as skills. Career-depth analysis captures this additional evidence and improves ranking accuracy.
+**Expected runtime**: ~90 seconds on a standard modern CPU (Stage 1: ~50s, Stage 2 reranking of Top 1K: ~40s).
 
-### Why Penalize Consulting-Only Profiles?
+### Validate Output
 
-The target role prioritizes hands-on product engineering and AI system ownership. Product-focused environments generally provide stronger alignment with these requirements, making company context an important ranking factor.
+```bash
+python validate_submission.py team_eclectic.csv
+```
+
+### Debug Mode
+
+```bash
+python rank.py --candidates candidates.jsonl --out team_eclectic.csv --debug
+```
+
+Debug mode outputs all 8 component scores + the NLP multiplier as extra columns.
 
 ---
 
-# Outcome
+## 📁 File Structure
 
-The final solution delivers:
+```
+.
+├── rank.py                       # Main ranking pipeline (1,314 lines)
+├── eclectic_pipeline.ipynb       # Jupyter notebook wrapper (mirrors rank.py)
+├── team_eclectic.csv             # Final output submission (top 100 candidates)
+├── validate_submission.py        # Official format validator
+├── sample_candidates.json        # 50-candidate test dataset
+├── candidates.jsonl              # Full 100K candidate dataset
+├── sample_submission.csv         # Reference submission format
+├── candidate_schema.json         # Candidate profile JSON schema
+├── requirements.txt              # Python dependencies
+├── submission_metadata.yaml      # Team + submission metadata
+├── job_description.docx          # Original JD (reference)
+├── redrob_signals_doc.docx       # Signal definitions (reference)
+└── submission_spec.docx          # Output format specification
+```
 
-* Accurate candidate-job matching
-* Explainable ranking decisions
-* Robust candidate quality validation
-* Scalable processing for 100K+ profiles
-* Full compliance with Redrob competition constraints
+---
 
-The system successfully transforms large-scale candidate datasets into recruiter-ready recommendations, enabling faster, more transparent, and higher-quality hiring decisions.
+## 🔧 Design Decisions
+
+### Why Not Use a Generative LLM?
+The hackathon enforces a **≤5 minute CPU-only constraint** on a standard machine. Generative LLMs (GPT-4, LLaMA, Mistral) require GPU and produce 1 token/second on CPU, making them impossible to use on 100K candidates. Our architecture uses only encoder-only models (`MiniLM`, `DistilRoBERTa`) which are extremely fast even on CPU.
+
+### Why a Two-Stage Architecture?
+Running Cross-Encoders on all 100K candidates sequentially on a CPU would take ~300 minutes — far beyond the constraint. By using the bi-encoder in Stage 1 to narrow to the Top 1,000 (top 1%), we apply the heavy Cross-Encoder and Zero-Shot models only where they matter, completing in 40 seconds.
+
+### Why Rules + NLP, Not a Trained Model?
+There is no labelled ground truth data for this specific JD. A rules engine derived directly from the JD text (skill taxonomy, title tiers, YoE bands) provides high-precision signals without needing training data.
+
+### Graceful Degradation
+If `spacy`, `sentence-transformers`, or `transformers` are not installed, the pipeline silently falls back — spaCy and MiniLM multipliers default to 1.0 (neutral), and Stage 2 is skipped. The base 8-component scoring always runs.
+
+---
+
+## 📦 Requirements
+
+```
+pandas
+sentence-transformers
+transformers
+spacy
+```
+
+> Models used: `all-MiniLM-L6-v2`, `cross-encoder/ms-marco-MiniLM-L-6-v2`, `cross-encoder/nli-distilroberta-base`, `en_core_web_sm`

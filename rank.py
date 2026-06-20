@@ -27,11 +27,16 @@ except Exception:
     _NLP_MODEL = None
 
 try:
-    from sentence_transformers import SentenceTransformer as _ST
+    from sentence_transformers import SentenceTransformer as _ST, CrossEncoder as _CE
+    from transformers import pipeline as _pipeline
     import numpy as _np
     _SMODEL = _ST("all-MiniLM-L6-v2")
+    _CMODEL = _CE("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    _ZMODEL = _pipeline("zero-shot-classification", model="cross-encoder/nli-distilroberta-base")
 except Exception:
     _SMODEL = None
+    _CMODEL = None
+    _ZMODEL = None
     _np = None
 
 # Ideal candidate description derived from the JD (used for MiniLM similarity)
@@ -872,7 +877,7 @@ def score_nlp_context(candidate: dict) -> float:
 
     # --- Layer 2: spaCy verb-object extraction ---
     if _NLP_MODEL is not None:
-        combined_text = (summary + " " + career_descs)[:800]
+        combined_text = (summary + " " + career_descs)[:3000]
         vo = _extract_verb_objects(combined_text)
         strong_jd_hits = sum(
             1 for v, objs in vo.items()
@@ -1186,14 +1191,9 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
     print(f"  Soft disqualified: {disqualified_count:,}")
     print(f"  Valid candidates: {len(results):,}")
 
-    # Min-max normalize scores to [0.01, 1.00] so top candidates
-    # aren't bunched at 1.0 due to multiplier saturation.
-    # Relative ordering is fully preserved.
-    all_scores = [r["score"] for r in results]
-    s_min, s_max = min(all_scores), max(all_scores)
-    if s_max > s_min:
-        for r in results:
-            r["score"] = round(0.01 + 0.99 * (r["score"] - s_min) / (s_max - s_min), 4)
+    # Scores are left as raw values without normalization
+    for r in results:
+        r["score"] = round(r["score"], 4)
 
     # Sort: primary by score desc, secondary by candidate_id asc (tie-break rule)
     df = pd.DataFrame(results)
@@ -1201,6 +1201,78 @@ def run_pipeline(candidates_path: str, output_path: str, debug: bool = False):
         by=["score", "candidate_id"],
         ascending=[False, True]
     ).reset_index(drop=True)
+
+    # ============================================================
+    # NLP STAGE 2: Cross-Encoder & Implicit Skill Extraction
+    # ============================================================
+    n_stage2 = min(1000, len(df))
+    if n_stage2 > 0 and _CMODEL is not None and _ZMODEL is not None:
+        print(f"  [NLP Stage 2] Extracting full profiles for Top {n_stage2} candidates...")
+        stage2_cids = set(df.head(n_stage2)["candidate_id"])
+        stage2_candidates = {}
+        for candidate in load_candidates(candidates_path):
+            cid = candidate.get("candidate_id", "")
+            if cid in stage2_cids:
+                stage2_candidates[cid] = candidate
+                if len(stage2_candidates) == n_stage2:
+                    break
+        
+        pairs = []
+        texts = []
+        cids = []
+        for cid in df.head(n_stage2)["candidate_id"]:
+            c = stage2_candidates[cid]
+            summary = c.get("profile", {}).get("summary", "") or ""
+            desc = " ".join(j.get("description", "") for j in c.get("career_history", []))[:1000]
+            text = (summary + " " + desc)[:1500]
+            pairs.append((_JD_IDEAL, text))
+            texts.append(text)
+            cids.append(cid)
+            
+        print("  [NLP Stage 2] Running Cross-Encoder (ms-marco-MiniLM)...")
+        ce_scores = _CMODEL.predict(pairs, batch_size=32, show_progress_bar=False)
+        import math
+        def expit(x): return 1 / (1 + math.exp(-x))
+        ce_mults = [0.8 + 0.4 * expit(score) for score in ce_scores] # 0.8x to 1.2x
+        
+        print("  [NLP Stage 2] Running Zero-Shot Classification for Implicit Skills...")
+        implicit_skills = ["Vector Databases", "LLM Fine-tuning", "Learning to Rank", "Semantic Search"]
+        # Using distilroberta for speed
+        zs_results = _ZMODEL(texts, implicit_skills, multi_label=True, batch_size=32)
+        
+        print("  [NLP Stage 2] Re-ranking...")
+        new_scores = []
+        new_reasonings = []
+        for i, cid in enumerate(cids):
+            base_score = df.loc[i, "score"]
+            base_reasoning = df.loc[i, "reasoning"]
+            
+            ce_mult = ce_mults[i]
+            zs_res = zs_results[i]
+            
+            found_implicit = []
+            for label, p in zip(zs_res["labels"], zs_res["scores"]):
+                if p > 0.6:
+                    found_implicit.append(label)
+                    
+            zs_mult = 1.0 + (0.05 * len(found_implicit)) # up to +20%
+            final_score = round(base_score * ce_mult * zs_mult, 4)
+            
+            reasoning = base_reasoning
+            if found_implicit:
+                reasoning = reasoning.rstrip(".") + f". implicitly detected skills: {', '.join(found_implicit)}."
+                
+            new_scores.append(final_score)
+            new_reasonings.append(reasoning)
+            
+        df.loc[:n_stage2-1, "score"] = new_scores
+        df.loc[:n_stage2-1, "reasoning"] = new_reasonings
+        
+        # Re-sort top candidates based on new final scores
+        df_stage2 = df.head(n_stage2).copy()
+        df_stage2 = df_stage2.sort_values(by=["score", "candidate_id"], ascending=[False, True]).reset_index(drop=True)
+        df = pd.concat([df_stage2, df.iloc[n_stage2:]]).reset_index(drop=True)
+        print("  [NLP Stage 2] Complete.")
 
     # Top 100 only (or fewer if sample dataset)
     n_top = min(100, len(df))
